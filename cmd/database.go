@@ -8,7 +8,6 @@ import (
 
 	"github.com/Hubert-Heijkers/tm1ctl/internal/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // databaseCmd represents the database command
@@ -18,36 +17,31 @@ var databaseCmd = &cobra.Command{
 }
 
 var databaseListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "Get the list of TM1 database of the TM1 service instance in context",
+	Use:   "list [name]",
+	Short: "Get the list of TM1 databases",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		data, err := utils.InstanceAPIGet("Databases")
+		var path string
+		if len(args) == 1 && args[0] != "" {
+			path = fmt.Sprintf("Databases('%s')", args[0])
+		} else {
+			path = "Databases"
+		}
+		data, err := utils.InstanceAPIGet(host, instance, user, password, path)
 		cobra.CheckErr(err)
+		// TODO: Highlight/mark the one that is active!
 		err = utils.OutputCollection(data)
 		cobra.CheckErr(err)
 	},
 }
 
-var databaseGetCmd = &cobra.Command{
-	Use:   "get [name]",
-	Short: "Shows the details of a TM1 database",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		path := fmt.Sprintf("Databases('%s')", args[0])
-		data, err := utils.InstanceAPIGet(path)
-		cobra.CheckErr(err)
-		err = utils.OutputEntity(data)
-		cobra.CheckErr(err)
-	},
-}
-
 var databaseCreateCmd = &cobra.Command{
-	Use:   "create [name]",
-	Short: "Creates a new TM1 database with the specified name on the TM1 service instance in context",
+	Use:   "create <name>",
+	Short: "Creates a new TM1 database with the specified name",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		payload := map[string]any{"Name": args[0]}
-		data, err := utils.InstanceAPIPost("Databases", payload)
+		data, err := utils.InstanceAPIPost(host, instance, user, password, "Databases", payload)
 		cobra.CheckErr(err)
 		err = utils.OutputEntity(data)
 		cobra.CheckErr(err)
@@ -55,37 +49,37 @@ var databaseCreateCmd = &cobra.Command{
 }
 
 var databaseDeleteCmd = &cobra.Command{
-	Use:   "delete [name]",
+	Use:   "delete <name>",
 	Short: "Deletes the TM1 database specified with all its artifacts",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		databaseName := args[0]
 		path := fmt.Sprintf("Databases('%s')", databaseName)
-		err := utils.InstanceAPIDelete(path)
+		err := utils.InstanceAPIDelete(host, instance, user, password, path)
 		cobra.CheckErr(err)
 		fmt.Printf("Database '%s' has been deleted!\n", databaseName)
 	},
 }
 
 func init() {
+
+	databaseListCmd.Flags().StringVar(&host, "host", "", "The host on which the instance is running, if not specified the active host will be used")
+	databaseListCmd.Flags().StringVar(&instance, "instance", "", "The instance to be used, if not specified the active instance will be used")
+	databaseListCmd.Flags().StringVar(&user, "user", "", "The user name needed to authenticate with the TM1 instance")
+	databaseListCmd.Flags().StringVar(&password, "password", "", "The password needed to authenticate with the TM1 instance")
 	databaseCmd.AddCommand(databaseListCmd)
-	databaseCmd.AddCommand(databaseGetCmd)
+
+	databaseCreateCmd.Flags().StringVar(&host, "host", "", "The host on which the instance is running, if not specified the active host will be used")
+	databaseCreateCmd.Flags().StringVar(&instance, "instance", "", "The instance to be used, if not specified the active instance will be used")
+	databaseCreateCmd.Flags().StringVar(&user, "user", "", "The user name needed to authenticate with the TM1 instance")
+	databaseCreateCmd.Flags().StringVar(&password, "password", "", "The password needed to authenticate with the TM1 instance")
 	databaseCmd.AddCommand(databaseCreateCmd)
+
+	databaseDeleteCmd.Flags().StringVar(&host, "host", "", "The host on which the instance is running, if not specified the active host will be used")
+	databaseDeleteCmd.Flags().StringVar(&instance, "instance", "", "The instance to be used, if not specified the active instance will be used")
+	databaseDeleteCmd.Flags().StringVar(&user, "user", "", "The user name needed to authenticate with the TM1 instance")
+	databaseDeleteCmd.Flags().StringVar(&password, "password", "", "The password needed to authenticate with the TM1 instance")
 	databaseCmd.AddCommand(databaseDeleteCmd)
+
 	rootCmd.AddCommand(databaseCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	databaseCmd.PersistentFlags().String("client-id", "", "The root client-id needed to authenticate with the TM1 service")
-	viper.BindPFlag("root-client-id", databaseCmd.PersistentFlags().Lookup("client-id"))
-	databaseCmd.PersistentFlags().String("client-secret", "", "The root client-secret needed to authenticate with the TM1 service")
-	viper.BindPFlag("root-client-secret", databaseCmd.PersistentFlags().Lookup("client-secret"))
-	databaseCmd.PersistentFlags().StringP("instance", "i", "", "The TM1 service instance to be used")
-	viper.BindPFlag("service-instance", databaseCmd.PersistentFlags().Lookup("instance"))
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	//databaseCmd.Flags().String("foo", "", "foo flag")
 }

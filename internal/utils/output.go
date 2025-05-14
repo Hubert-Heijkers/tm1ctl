@@ -109,3 +109,13 @@ func OutputCollection(data any) error {
 
 	return Output(selected)
 }
+
+func OutputMap(data map[string]any, keyPropName string) error {
+
+	// TODO: Convert to an array of objects with a property representing the Key (and potentially other properties)
+	// Effectively converting the key to a property in each object presuming that key property doesn't already exists (and must have same value)
+	//return Output(selected)
+
+	// FOR NOW DUMP THE JSON
+	return printPrettyJSON(data)
+}

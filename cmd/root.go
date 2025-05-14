@@ -10,7 +10,6 @@ import (
 )
 
 var cfgFile string
-var outputFormat string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -50,8 +49,13 @@ func init() {
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	// Defaults
-	viper.SetDefault("service-root-url", "http://localhost:4444")
-	viper.SetDefault("service-instance", "tm1")
+	hostmap := make(map[string]any)
+	hostmap["service_root_url"] = "http://localhost:4444"
+	hosts := make(map[string]any)
+	hosts["local"] = hostmap
+	viper.SetDefault("hosts", hosts)
+	viper.SetDefault("host", "local")
+
 	viper.SetDefault("output-format", "table")
 
 	if cfgFile != "" {

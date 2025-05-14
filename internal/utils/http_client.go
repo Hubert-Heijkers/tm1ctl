@@ -12,10 +12,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-func internalGet(path, authorization string) (map[string]any, error) {
-	fullURL := fmt.Sprintf("%s/%s", viper.GetString("service-root-url"), path)
+func internalGet(url, authorization string) (map[string]any, error) {
 
-	req, err := http.NewRequest(http.MethodGet, fullURL, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GET request: %w", err)
 	}
@@ -45,15 +44,14 @@ func internalGet(path, authorization string) (map[string]any, error) {
 	return result, nil
 }
 
-func internalPost(path, authorization string, payload map[string]any) (map[string]any, error) {
-	fullURL := fmt.Sprintf("%s/%s", viper.GetString("service-root-url"), path)
+func internalPost(url, authorization string, payload map[string]any) (map[string]any, error) {
 
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal body: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, fullURL, bytes.NewBuffer(body))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create POST request: %w", err)
 	}
@@ -85,15 +83,14 @@ func internalPost(path, authorization string, payload map[string]any) (map[strin
 	return result, nil
 }
 
-func internalPutFile(path, authorization, file string) error {
-	fullURL := fmt.Sprintf("%s/%s", viper.GetString("service-root-url"), path)
+func internalPutFile(url, authorization, file string) error {
 
 	body, err := os.Open(file)
 	if err != nil {
 		return fmt.Errorf("unable to open backupset '%s' due to: %w", file, err)
 	}
 
-	req, err := http.NewRequest(http.MethodPut, fullURL, body)
+	req, err := http.NewRequest(http.MethodPut, url, body)
 	if err != nil {
 		return fmt.Errorf("failed to create PUT request: %w", err)
 	}
@@ -118,10 +115,9 @@ func internalPutFile(path, authorization, file string) error {
 	return nil
 }
 
-func internalDelete(path, authorization string) error {
-	fullURL := fmt.Sprintf("%s/%s", viper.GetString("service-root-url"), path)
+func internalDelete(url, authorization string) error {
 
-	req, err := http.NewRequest(http.MethodDelete, fullURL, nil)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE request: %w", err)
 	}
@@ -145,72 +141,223 @@ func internalDelete(path, authorization string) error {
 	return nil
 }
 
-func ManageAPIGet(path string) (map[string]any, error) {
-	manageRelativePath := fmt.Sprintf("manage/v1/%s", path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("root-client-id")+":"+viper.GetString("root-client-secret"))))
+func buildRootAuthorizationHeader(host string, config map[string]any) (string, error) {
 
-	return internalGet(manageRelativePath, authorization)
+	// Grab root client id and secret to compose the value for the authorization header
+	rootClientID, err := GetRootClientIDFromHostConfig(host, config)
+	var rootClientSecret string
+	if err == nil {
+		rootClientSecret, err = GetRootClientSecretFromHostConfig(host, config)
+	}
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(rootClientID+":"+rootClientSecret))), nil
 }
 
-func ManageAPIPost(path string, payload map[string]any) (map[string]any, error) {
-	manageRelativePath := fmt.Sprintf("manage/v1/%s", path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("root-client-id")+":"+viper.GetString("root-client-secret"))))
+func buildUserAuthorizationHeader(user, password string) (string, error) {
 
-	return internalPost(manageRelativePath, authorization, payload)
+	// Grab defaultroot client id and secret to compose the value for the authorization header
+	// Note: Don't mix user name passed and default with password passed or default but allow
+	// specifying the password whilst the system already remembers the user's name.
+	if password == "" && user == "" {
+		password = viper.GetString("password")
+	}
+	if user == "" {
+		user = viper.GetString("user")
+	}
+	if user == "" {
+		return "", fmt.Errorf("no user name specified")
+	}
+	return fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(user+":"+password))), nil
 }
 
-func ManageAPIDelete(path string) error {
-	manageRelativePath := fmt.Sprintf("manage/v1/%s", path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("root-client-id")+":"+viper.GetString("root-client-secret"))))
+func ManageAPIGet(host, path string) (map[string]any, error) {
 
-	return internalDelete(manageRelativePath, authorization)
+	// Lookup the host's configuration
+	config, err := GetHostConfiguration(host)
+	if err != nil {
+		return nil, err
+	}
+
+	// Grab the service root url
+	serviceRootURL, err := GetServiceRootURLFromHostConfig(host, config)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build URL and authorization header (root)
+	url := fmt.Sprintf("%s/manage/v1/%s", serviceRootURL, path)
+	authorization, err := buildRootAuthorizationHeader(host, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return internalGet(url, authorization)
 }
 
-func InstanceAPIGet(path string) (map[string]any, error) {
-	instranceRelativePath := fmt.Sprintf("%s/api/v1/%s", viper.GetString("service-instance"), path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("user")+":"+viper.GetString("password"))))
+func ManageAPIPost(host, path string, payload map[string]any) (map[string]any, error) {
 
-	return internalGet(instranceRelativePath, authorization)
+	// Lookup the host's configuration
+	config, err := GetHostConfiguration(host)
+	if err != nil {
+		return nil, err
+	}
+
+	// Grab the service root url
+	serviceRootURL, err := GetServiceRootURLFromHostConfig(host, config)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build URL and authorization header (root)
+	url := fmt.Sprintf("%s/manage/v1/%s", serviceRootURL, path)
+	authorization, err := buildRootAuthorizationHeader(host, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return internalPost(url, authorization, payload)
 }
 
-func InstanceAPIPost(path string, payload map[string]any) (map[string]any, error) {
-	instranceRelativePath := fmt.Sprintf("%s/api/v1/%s", viper.GetString("service-instance"), path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("user")+":"+viper.GetString("password"))))
+func ManageAPIDelete(host, path string) error {
+	// Lookup the host's configuration
+	config, err := GetHostConfiguration(host)
+	if err != nil {
+		return err
+	}
 
-	return internalPost(instranceRelativePath, authorization, payload)
+	// Grab the service root url
+	serviceRootURL, err := GetServiceRootURLFromHostConfig(host, config)
+	if err != nil {
+		return err
+	}
+
+	// Build URL and authorization header (root)
+	url := fmt.Sprintf("%s/manage/v1/%s", serviceRootURL, path)
+	authorization, err := buildRootAuthorizationHeader(host, config)
+	if err != nil {
+		return err
+	}
+
+	return internalDelete(url, authorization)
 }
 
-func InstanceAPIDelete(path string) error {
-	instranceRelativePath := fmt.Sprintf("%s/api/v1/%s", viper.GetString("service-instance"), path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("user")+":"+viper.GetString("password"))))
+func InstanceAPIGet(host, instance, user, password, path string) (map[string]any, error) {
+	// Grab the instance root url
+	instanceRootURL, err := GetInstanceRootURL(host, instance)
+	if err != nil {
+		return nil, err
+	}
 
-	return internalDelete(instranceRelativePath, authorization)
+	// Build URL and authorization header (user)
+	url := fmt.Sprintf("%s/%s", instanceRootURL, path)
+	authorization, err := buildUserAuthorizationHeader(user, password)
+	if err != nil {
+		return nil, err
+	}
+
+	return internalGet(url, authorization)
 }
 
-func DatabaseAPIGet(path string) (map[string]any, error) {
-	instranceRelativePath := fmt.Sprintf("%s/api/v1/Databases('%s')/%s", viper.GetString("service-instance"), viper.GetString("database"), path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("user")+":"+viper.GetString("password"))))
+func InstanceAPIPost(host, instance, user, password, path string, payload map[string]any) (map[string]any, error) {
+	// Grab the instance root url
+	instanceRootURL, err := GetInstanceRootURL(host, instance)
+	if err != nil {
+		return nil, err
+	}
 
-	return internalGet(instranceRelativePath, authorization)
+	// Build URL and authorization header (user)
+	url := fmt.Sprintf("%s/%s", instanceRootURL, path)
+	authorization, err := buildUserAuthorizationHeader(user, password)
+	if err != nil {
+		return nil, err
+	}
+
+	return internalPost(url, authorization, payload)
 }
 
-func DatabaseAPIPost(path string, payload map[string]any) (map[string]any, error) {
-	instranceRelativePath := fmt.Sprintf("%s/api/v1/Databases('%s')/%s", viper.GetString("service-instance"), viper.GetString("database"), path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("user")+":"+viper.GetString("password"))))
+func InstanceAPIDelete(host, instance, user, password, path string) error {
+	// Grab the instance root url
+	instanceRootURL, err := GetInstanceRootURL(host, instance)
+	if err != nil {
+		return err
+	}
 
-	return internalPost(instranceRelativePath, authorization, payload)
+	// Build URL and authorization header (user)
+	url := fmt.Sprintf("%s/%s", instanceRootURL, path)
+	authorization, err := buildUserAuthorizationHeader(user, password)
+	if err != nil {
+		return err
+	}
+
+	return internalDelete(url, authorization)
 }
 
-func DatabaseAPIDelete(path string) error {
-	instranceRelativePath := fmt.Sprintf("%s/api/v1/Databases('%s')/%s", viper.GetString("service-instance"), viper.GetString("database"), path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("user")+":"+viper.GetString("password"))))
+func DatabaseAPIGet(host, instance, database, user, password, path string) (map[string]any, error) {
+	// Grab the database root url
+	databaseRootURL, err := GetDatabaseRootURL(host, instance, database)
+	if err != nil {
+		return nil, err
+	}
 
-	return internalDelete(instranceRelativePath, authorization)
+	// Build URL and authorization header (user)
+	url := fmt.Sprintf("%s/%s", databaseRootURL, path)
+	authorization, err := buildUserAuthorizationHeader(user, password)
+	if err != nil {
+		return nil, err
+	}
+
+	return internalGet(url, authorization)
 }
 
-func DatabaseAPIPutFile(path, file string) error {
-	instranceRelativePath := fmt.Sprintf("%s/api/v1/Databases('%s')/%s", viper.GetString("service-instance"), viper.GetString("database"), path)
-	authorization := fmt.Sprintf("Basic %s", base64.URLEncoding.EncodeToString([]byte(viper.GetString("user")+":"+viper.GetString("password"))))
+func DatabaseAPIPost(host, instance, database, user, password, path string, payload map[string]any) (map[string]any, error) {
+	// Grab the database root url
+	databaseRootURL, err := GetDatabaseRootURL(host, instance, database)
+	if err != nil {
+		return nil, err
+	}
 
-	return internalPutFile(instranceRelativePath, authorization, file)
+	// Build URL and authorization header (user)
+	url := fmt.Sprintf("%s/%s", databaseRootURL, path)
+	authorization, err := buildUserAuthorizationHeader(user, password)
+	if err != nil {
+		return nil, err
+	}
+
+	return internalPost(url, authorization, payload)
+}
+
+func DatabaseAPIDelete(host, instance, database, user, password, path string) error {
+	// Grab the database root url
+	databaseRootURL, err := GetDatabaseRootURL(host, instance, database)
+	if err != nil {
+		return err
+	}
+
+	// Build URL and authorization header (user)
+	url := fmt.Sprintf("%s/%s", databaseRootURL, path)
+	authorization, err := buildUserAuthorizationHeader(user, password)
+	if err != nil {
+		return err
+	}
+
+	return internalDelete(url, authorization)
+}
+
+func DatabaseAPIPutFile(host, instance, database, user, password, path, file string) error {
+	// Grab the database root url
+	databaseRootURL, err := GetDatabaseRootURL(host, instance, database)
+	if err != nil {
+		return err
+	}
+
+	// Build URL and authorization header (user)
+	url := fmt.Sprintf("%s/%s", databaseRootURL, path)
+	authorization, err := buildUserAuthorizationHeader(user, password)
+	if err != nil {
+		return err
+	}
+
+	return internalPutFile(url, authorization, file)
 }
