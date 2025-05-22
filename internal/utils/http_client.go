@@ -7,10 +7,25 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
+	"sync"
 
 	"github.com/spf13/viper"
 )
+
+var (
+	client     *http.Client
+	clientOnce sync.Once
+)
+
+func getHttpClient() *http.Client {
+	clientOnce.Do(func() {
+		jar, _ := cookiejar.New(nil)
+		client = &http.Client{Jar: jar}
+	})
+	return client
+}
 
 func internalGet(url, authorization string) (map[string]any, error) {
 
@@ -24,7 +39,7 @@ func internalGet(url, authorization string) (map[string]any, error) {
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := getHttpClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -62,7 +77,7 @@ func internalPost(url, authorization string, payload map[string]any) (map[string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := getHttpClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -101,7 +116,7 @@ func internalPutFile(url, authorization, file string) error {
 	req.Header.Add("Content-Type", "application/octet-stream")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := getHttpClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -127,7 +142,7 @@ func internalDelete(url, authorization string) error {
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := getHttpClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
