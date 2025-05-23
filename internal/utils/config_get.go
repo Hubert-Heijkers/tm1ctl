@@ -20,7 +20,7 @@ func GetHostName(name string) (string, error) {
 		name = viper.GetString("host")
 	}
 
-	// No active host specified either then return an error
+	// No (active) host specified then return an error
 	if name == "" {
 		return "", fmt.Errorf("no host specified")
 	}
@@ -47,6 +47,42 @@ func GetHostConfiguration(name string) (map[string]any, error) {
 		return nil, fmt.Errorf("invalid configuration for host '%s', format invalid", name)
 	}
 	return host, nil
+}
+
+func GetUserName(name string) (string, error) {
+
+	// No user specified then use active user
+	if name == "" {
+		name = viper.GetString("user")
+	}
+
+	// No (active) user specified then return an error
+	if name == "" {
+		return "", fmt.Errorf("no user specified")
+	}
+
+	return name, nil
+}
+
+func GetUserConfiguration(name string) (map[string]any, error) {
+
+	// Get the user name
+	name, err := GetUserName(name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Lookup the user in list of configured users
+	users := viper.GetStringMap("users")
+	raw := users[name]
+	if raw == nil {
+		return nil, fmt.Errorf("no configuration specified for user '%s'", name)
+	}
+	user, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("invalid configuration for user '%s', format invalid", name)
+	}
+	return user, nil
 }
 
 func getStringFromHostConfig(name string, config map[string]any, prop_name, prop_desc string) (string, error) {

@@ -8,10 +8,17 @@ import (
 	"github.com/spf13/viper"
 )
 
+// The config keys we allow to set using the config command
 var allowedConfigKeys = map[string]bool{
+	"output-format": true,
+}
+
+// The config keys we show when list all configurations
+var listConfigKeys = map[string]bool{
+	"host":          true,
+	"instance":      true,
 	"database":      true,
 	"user":          true,
-	"password":      true,
 	"output-format": true,
 }
 
@@ -23,7 +30,32 @@ var allowedOutputFormats = map[string]bool{
 // configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage tm1ctl configuration",
+	Short: "Manage global tm1ctl configuration",
+}
+
+func getConfigValue(key string) any {
+	switch key {
+	case "instance":
+		host := getConfigValue("host")
+		if host == nil || host == "" {
+			return nil
+		}
+		instance, err := utils.GetInstanceName(host.(string), "")
+		if err != nil || instance == "" {
+			return nil
+		}
+		return instance
+
+	case "database":
+		instance := getConfigValue("instance")
+		if instance == nil || instance == "" {
+			return nil
+		}
+
+		// TODO: Retrieve active database from the instance once we maintain instances and have the ability to set such active database
+		return nil
+	}
+	return viper.Get(key)
 }
 
 var configListCmd = &cobra.Command{
@@ -34,23 +66,23 @@ var configListCmd = &cobra.Command{
 		if len(args) == 1 && args[0] != "" {
 			key := args[0]
 
-			if !allowedConfigKeys[key] {
+			if !listConfigKeys[key] {
 				fmt.Printf("Error: '%s' is not a recognized configuration key\n", key)
 				return
 			}
 
-			val := viper.Get(key)
+			val := getConfigValue(key)
 			if val != nil && val != "" {
-				fmt.Printf("%s = %v\n", key, val)
+				fmt.Printf("%s = %s\n", key, utils.Stringify(val))
 			} else {
 				fmt.Printf("No value set for key '%s'", key)
 			}
 
 		} else {
-			for key := range allowedConfigKeys {
-				val := viper.Get(key)
+			for key := range listConfigKeys {
+				val := getConfigValue(key)
 				if val != nil && val != "" {
-					fmt.Printf("%s = %v\n", key, val)
+					fmt.Printf("%s = %s\n", key, utils.Stringify(val))
 				}
 			}
 		}

@@ -27,6 +27,7 @@ var restoreCmd = &cobra.Command{
 
 		// No instance specified then use active instance
 		instance, err := utils.GetInstanceName(host, instance)
+		cobra.CheckErr(err)
 
 		fmt.Printf("Restore initiated on database '%s' running on instance '%s' using backupset: %s\n", database, instance, args[0])
 

@@ -99,7 +99,7 @@ var instanceUseCmd = &cobra.Command{
 			cobra.CheckErr(utils.SaveConfiguration())
 			fmt.Printf("Set active instance on host '%s' to '%s'.\n", host, name)
 		} else {
-			hostMap["instance"] = ""
+			delete(hostMap, "instance")
 			hosts[host] = hostMap
 			viper.Set("hosts", hosts)
 			cobra.CheckErr(utils.SaveConfiguration())

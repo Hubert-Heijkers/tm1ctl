@@ -18,7 +18,7 @@ func printPrettyJSON(data any) error {
 	return enc.Encode(data)
 }
 
-func stringify(v any) string {
+func Stringify(v any) string {
 	switch val := v.(type) {
 	case string:
 		return val
@@ -53,7 +53,7 @@ func printArrayTable(list []any) error {
 		row := make([]string, len(headers))
 		obj := item.(map[string]any)
 		for i, key := range headers {
-			row[i] = stringify(obj[key])
+			row[i] = Stringify(obj[key])
 		}
 		table.Append(row)
 	}

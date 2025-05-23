@@ -39,7 +39,7 @@ var hostListCmd = &cobra.Command{
 				fmt.Printf("no configuration specified for host '%s'\n", name)
 				return
 			}
-			err := utils.OutputCollection(host)
+			err := utils.OutputMap(host.(map[string]any), "Name")
 			cobra.CheckErr(err)
 			return
 		}
@@ -78,16 +78,31 @@ var hostSetCmd = &cobra.Command{
 		if serviceRootURL != "" {
 			hostMap["service_root_url"] = serviceRootURL
 			changed = true
+		} else {
+			if cmd.Flags().Changed("service_root_url") {
+				delete(hostMap, "service_root_url")
+				changed = true
+			}
 		}
 
 		if rootClientId != "" {
 			hostMap["root_client_id"] = rootClientId
 			changed = true
+		} else {
+			if cmd.Flags().Changed("root_client_id") {
+				delete(hostMap, "root_client_id")
+				changed = true
+			}
 		}
 
 		if rootClientSecret != "" {
 			hostMap["root_client_secret"] = rootClientSecret
 			changed = true
+		} else {
+			if cmd.Flags().Changed("root_client_secret") {
+				delete(hostMap, "root_client_secret")
+				changed = true
+			}
 		}
 
 		if !changed {
